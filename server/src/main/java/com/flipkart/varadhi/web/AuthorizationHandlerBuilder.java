@@ -13,25 +13,18 @@ import io.vertx.ext.web.handler.HttpException;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static com.flipkart.varadhi.common.Constants.CONTEXT_KEY_RESOURCE_HIERARCHY;
+import static com.flipkart.varadhi.common.Constants.*;
 import static java.net.HttpURLConnection.*;
 
 @Slf4j
 public class AuthorizationHandlerBuilder {
 
-    private final List<String> superUsers = new ArrayList<>();
-
     private final AuthorizationProvider provider;
 
-    public AuthorizationHandlerBuilder(List<String> superUsers, AuthorizationProvider provider) {
-        if (superUsers != null) {
-            this.superUsers.addAll(superUsers);
-        }
+    public AuthorizationHandlerBuilder(AuthorizationProvider provider) {
         this.provider = Objects.requireNonNull(provider, "Authorization Provider is null");
     }
 
@@ -63,7 +56,7 @@ public class AuthorizationHandlerBuilder {
         @Override
         public void handle(RoutingContext ctx) {
             UserContext user = ctx.user() == null ? null : new VertxUserContext(ctx.user());
-            Map<ResourceType, ResourceHierarchy> hierarchies = ctx.get(CONTEXT_KEY_RESOURCE_HIERARCHY);
+            Map<ResourceType, ResourceHierarchy> hierarchies = ctx.get(ContextKeys.RESOURCE_HIERARCHY);
             ResourceHierarchy hierarchy = hierarchies.getOrDefault(authorizationOnAction.getResourceType(), null);
             if (null == hierarchy) {
                 ctx.fail(new HttpException(HTTP_INTERNAL_ERROR, "resource hierarchy is not set."));
@@ -87,11 +80,14 @@ public class AuthorizationHandlerBuilder {
                 return Future.failedFuture(new HttpException(HTTP_INTERNAL_ERROR, "resource hierarchy is not set"));
             }
 
-            if (superUsers.contains(userContext.getSubject())) {
-                return Future.succeededFuture();
-            }
-            String resourcePath = resourceHierarchy.getResourcePath();
-            return authorizedInternal(userContext, authorizationOnAction, resourcePath);
+            return provider.isSuperAdmin(userContext).compose(authorized -> {
+                if (Boolean.TRUE.equals(authorized)) {
+                    return Future.succeededFuture();
+                } else {
+                    String resourcePath = resourceHierarchy.getResourcePath();
+                    return authorizedInternal(userContext, authorizationOnAction, resourcePath);
+                }
+            });
         }
     }
 }

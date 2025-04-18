@@ -1,26 +1,26 @@
-package com.flipkart.varadhi.web;
+package com.flipkart.varadhi.web.configurators;
 
 import com.flipkart.varadhi.spi.ConfigFileResolver;
 import com.flipkart.varadhi.server.spi.authz.AuthorizationOptions;
 import com.flipkart.varadhi.server.spi.authz.AuthorizationProvider;
 import com.flipkart.varadhi.config.AppConfiguration;
 import com.flipkart.varadhi.common.exceptions.InvalidConfigException;
+import com.flipkart.varadhi.web.AuthorizationHandlerBuilder;
 import com.flipkart.varadhi.web.routes.RouteConfigurator;
 import com.flipkart.varadhi.web.routes.RouteDefinition;
 import io.vertx.ext.web.Route;
 import org.apache.commons.lang3.StringUtils;
 
-public class AuthzHandler implements RouteConfigurator {
+public class AuthzConfigurator implements RouteConfigurator {
     private final AuthorizationHandlerBuilder authorizationHandlerBuilder;
-    private final SuperUserHandler superUserHandler;
 
-    public AuthzHandler(AppConfiguration configuration, ConfigFileResolver resolver) throws InvalidConfigException {
-        if (configuration.isAuthorizationEnabled()) {
+    public AuthzConfigurator(AppConfiguration configuration, ConfigFileResolver resolver)
+        throws InvalidConfigException {
+        if (configuration.getAuthorization().isEnabled()) {
             authorizationHandlerBuilder = createAuthorizationHandler(configuration, resolver);
         } else {
             authorizationHandlerBuilder = null;
         }
-        superUserHandler = new SuperUserHandler(configuration);
     }
 
     public void configure(Route route, RouteDefinition routeDef) {
@@ -28,19 +28,15 @@ public class AuthzHandler implements RouteConfigurator {
             routeDef.getAuthorizeOnActions()
                     .forEach(action -> route.handler(authorizationHandlerBuilder.build(action)));
         }
-        superUserHandler.configure(route, routeDef);
     }
 
     AuthorizationHandlerBuilder createAuthorizationHandler(
         AppConfiguration configuration,
         ConfigFileResolver resolver
     ) {
-        if (configuration.isAuthorizationEnabled()) {
+        if (configuration.getAuthorization().isEnabled()) {
             AuthorizationProvider authorizationProvider = getAuthorizationProvider(configuration, resolver);
-            return new AuthorizationHandlerBuilder(
-                configuration.getAuthorization().getSuperUsers(),
-                authorizationProvider
-            );
+            return new AuthorizationHandlerBuilder(authorizationProvider);
         } else {
             return null;
         }

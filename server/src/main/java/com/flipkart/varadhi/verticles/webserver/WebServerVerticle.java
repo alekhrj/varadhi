@@ -2,6 +2,8 @@ package com.flipkart.varadhi.verticles.webserver;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import com.flipkart.varadhi.CoreServices;
 import com.flipkart.varadhi.auth.DefaultAuthorizationProvider;
@@ -26,6 +28,9 @@ import com.flipkart.varadhi.utils.VaradhiTopicFactory;
 import com.flipkart.varadhi.verticles.consumer.ConsumerClientFactoryImpl;
 import com.flipkart.varadhi.verticles.controller.ControllerRestClient;
 import com.flipkart.varadhi.web.*;
+import com.flipkart.varadhi.web.configurators.*;
+import com.flipkart.varadhi.web.FailureHandler;
+import com.flipkart.varadhi.web.RequestBodyHandler;
 import com.flipkart.varadhi.web.routes.RouteBehaviour;
 import com.flipkart.varadhi.web.routes.RouteConfigurator;
 import com.flipkart.varadhi.web.routes.RouteDefinition;
@@ -64,6 +69,8 @@ public class WebServerVerticle extends AbstractVerticle {
     private DlqService dlqService;
     private HttpServer httpServer;
 
+    private List<Pattern> disableAPIPatterns;
+
     public WebServerVerticle(
         AppConfiguration configuration,
         CoreServices services,
@@ -76,6 +83,11 @@ public class WebServerVerticle extends AbstractVerticle {
         this.metaStore = services.getMetaStoreProvider().getMetaStore();
         this.meterRegistry = services.getMeterRegistry();
         this.tracer = services.getTracer("varadhi");
+
+        this.disableAPIPatterns = configuration.getDisabledAPIs()
+                                               .stream()
+                                               .map(Pattern::compile)
+                                               .collect(Collectors.toList());
     }
 
     public static Handler<RoutingContext> wrapBlockingExecution(Vertx vertx, Handler<RoutingContext> apiEndHandler) {
@@ -170,8 +182,16 @@ public class WebServerVerticle extends AbstractVerticle {
         routeDefinitions.addAll(getIamPolicyRoutes());
         routeDefinitions.addAll(getAdminApiRoutes());
         routeDefinitions.addAll(getProduceApiRoutes());
+
+        routeDefinitions = routeDefinitions.stream().filter(this::isRouteEnabled).toList();
+
         configureApiRoutes(router, routeDefinitions);
         return router;
+    }
+
+    private boolean isRouteEnabled(RouteDefinition routeDefinition) {
+        return this.disableAPIPatterns.stream()
+                                      .noneMatch(pattern -> pattern.matcher(routeDefinition.getName()).matches());
     }
 
     private List<RouteDefinition> getIamPolicyRoutes() {
@@ -282,8 +302,8 @@ public class WebServerVerticle extends AbstractVerticle {
     }
 
     private void setupRouteConfigurators() {
-        AuthnHandler authnHandler = new AuthnHandler(vertx, configuration, meterRegistry);
-        AuthzHandler authzHandler = new AuthzHandler(configuration, configResolver);
+        AuthnConfigurator authnConfigurator = new AuthnConfigurator(vertx, configuration, meterRegistry);
+        AuthzConfigurator authzConfigurator = new AuthzConfigurator(configuration, configResolver);
         RequestTelemetryConfigurator requestTelemetryConfigurator = new RequestTelemetryConfigurator(
             new SpanProvider(tracer),
             meterRegistry
@@ -292,14 +312,14 @@ public class WebServerVerticle extends AbstractVerticle {
         RequestBodyHandler requestBodyHandler = new RequestBodyHandler(
             configuration.getRestOptions().getPayloadSizeMax()
         );
-        RequestBodyParser bodyParser = new RequestBodyParser();
-        HierarchyHandler hierarchyHandler = new HierarchyHandler();
+        RequestBodyParsingConfigurator bodyParser = new RequestBodyParsingConfigurator();
+        HierarchyConfigurator hierarchyConfigurator = new HierarchyConfigurator();
         routeBehaviourConfigurators.put(RouteBehaviour.telemetry, requestTelemetryConfigurator);
-        routeBehaviourConfigurators.put(RouteBehaviour.authenticated, authnHandler);
+        routeBehaviourConfigurators.put(RouteBehaviour.authenticated, authnConfigurator);
         routeBehaviourConfigurators.put(RouteBehaviour.hasBody, (route, routeDef) -> route.handler(requestBodyHandler));
         routeBehaviourConfigurators.put(RouteBehaviour.parseBody, bodyParser);
-        routeBehaviourConfigurators.put(RouteBehaviour.addHierarchy, hierarchyHandler);
-        routeBehaviourConfigurators.put(RouteBehaviour.authorized, authzHandler);
+        routeBehaviourConfigurators.put(RouteBehaviour.addHierarchy, hierarchyConfigurator);
+        routeBehaviourConfigurators.put(RouteBehaviour.authorized, authzConfigurator);
     }
 
     private void configureApiRoutes(Router router, List<RouteDefinition> apiRoutes) {

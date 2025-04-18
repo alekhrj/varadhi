@@ -17,13 +17,14 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.Map;
 
-import static com.flipkart.varadhi.common.Constants.CONTEXT_KEY_BODY;
+import static com.flipkart.varadhi.common.Constants.ContextKeys.REQUEST_BODY;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_PROJECT;
 import static com.flipkart.varadhi.entities.auth.ResourceAction.*;
 
 @Slf4j
 @ExtensionMethod ({Extensions.RequestBodyExtension.class, Extensions.RoutingContextExtension.class})
 public class ProjectHandlers implements RouteProvider {
+    public static final String API_NAME = "Project";
     private final ProjectService projectService;
 
     public ProjectHandlers(ProjectService projectService) {
@@ -35,20 +36,20 @@ public class ProjectHandlers implements RouteProvider {
         return new SubRoutes(
             "/v1/projects",
             List.of(
-                RouteDefinition.get("GetProject", "/:project")
+                RouteDefinition.get("get", API_NAME, "/:project")
                                .authorize(PROJECT_GET)
                                .build(this::getHierarchies, this::get),
-                RouteDefinition.post("CreateProject", "")
+                RouteDefinition.post("create", API_NAME, "")
                                .hasBody()
                                .bodyParser(this::setProject)
                                .authorize(PROJECT_CREATE)
                                .build(this::getHierarchies, this::create),
-                RouteDefinition.put("UpdateProject", "")
+                RouteDefinition.put("update", API_NAME, "")
                                .hasBody()
                                .bodyParser(this::setProject)
                                .authorize(PROJECT_UPDATE)
                                .build(this::getHierarchies, this::update),
-                RouteDefinition.delete("DeleteProject", "/:project")
+                RouteDefinition.delete("delete", API_NAME, "/:project")
                                .authorize(PROJECT_DELETE)
                                .build(this::getHierarchies, this::delete)
             )
@@ -57,12 +58,12 @@ public class ProjectHandlers implements RouteProvider {
 
     public void setProject(RoutingContext ctx) {
         Project project = ctx.body().asValidatedPojo(Project.class);
-        ctx.put(CONTEXT_KEY_BODY, project);
+        ctx.put(REQUEST_BODY, project);
     }
 
     public Map<ResourceType, ResourceHierarchy> getHierarchies(RoutingContext ctx, boolean hasBody) {
         Project project = hasBody ?
-            ctx.get(CONTEXT_KEY_BODY) :
+            ctx.get(REQUEST_BODY) :
             projectService.getCachedProject(ctx.request().getParam(PATH_PARAM_PROJECT));
         return Map.of(ResourceType.PROJECT, new Hierarchies.ProjectHierarchy(project));
     }
@@ -74,7 +75,7 @@ public class ProjectHandlers implements RouteProvider {
     }
 
     public void create(RoutingContext ctx) {
-        Project project = ctx.get(CONTEXT_KEY_BODY);
+        Project project = ctx.get(REQUEST_BODY);
         Project createdProject = projectService.createProject(project);
         ctx.endApiWithResponse(createdProject);
     }
@@ -86,7 +87,7 @@ public class ProjectHandlers implements RouteProvider {
     }
 
     public void update(RoutingContext ctx) {
-        Project project = ctx.get(CONTEXT_KEY_BODY);
+        Project project = ctx.get(REQUEST_BODY);
         Project updatedProject = projectService.updateProject(project);
         ctx.endApiWithResponse(updatedProject);
     }

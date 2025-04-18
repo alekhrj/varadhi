@@ -1,7 +1,8 @@
-package com.flipkart.varadhi.web;
+package com.flipkart.varadhi.web.configurators;
 
 import com.flipkart.varadhi.common.exceptions.UnAuthenticatedException;
 import com.flipkart.varadhi.config.AppConfiguration;
+
 import com.flipkart.varadhi.entities.Org;
 import com.flipkart.varadhi.common.exceptions.InvalidConfigException;
 import com.flipkart.varadhi.entities.auth.UserContext;
@@ -26,10 +27,10 @@ import static com.flipkart.varadhi.common.Constants.ContextKeys.USER_CONTEXT;
 import static com.flipkart.varadhi.server.spi.vo.URLDefinition.anyMatch;
 import static io.netty.handler.codec.http.HttpResponseStatus.UNAUTHORIZED;
 
-public class AuthnHandler implements RouteConfigurator {
+public class AuthnConfigurator implements RouteConfigurator {
     private final AuthenticationHandlerWrapper authenticationHandler;
 
-    public AuthnHandler(Vertx vertx, AppConfiguration configuration, MeterRegistry meterRegistry)
+    public AuthnConfigurator(Vertx vertx, AppConfiguration configuration, MeterRegistry meterRegistry)
         throws InvalidConfigException {
 
         AuthenticationOptions authenticationConfig = configuration.getAuthenticationOptions();
@@ -53,7 +54,6 @@ public class AuthnHandler implements RouteConfigurator {
                 );
             }
             provider = (AuthenticationHandlerProvider)providerClass.getDeclaredConstructor().newInstance();
-
 
         } catch (ClassNotFoundException e) {
             throw new InvalidConfigException(

@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static com.flipkart.varadhi.common.Constants.CONTEXT_KEY_BODY;
+import static com.flipkart.varadhi.common.Constants.ContextKeys.REQUEST_BODY;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_PROJECT;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_TOPIC;
 import static com.flipkart.varadhi.common.Constants.QueryParams.QUERY_PARAM_DELETION_TYPE;
@@ -46,6 +46,7 @@ import static com.flipkart.varadhi.entities.auth.ResourceAction.TOPIC_UPDATE;
 @Slf4j
 @ExtensionMethod ({RequestBodyExtension.class, RoutingContextExtension.class})
 public class TopicHandlers implements RouteProvider {
+    public static final String API_NAME = "Topic";
 
     private final VaradhiTopicFactory varadhiTopicFactory;
     private final VaradhiTopicService varadhiTopicService;
@@ -78,19 +79,21 @@ public class TopicHandlers implements RouteProvider {
         return new SubRoutes(
             "/v1/projects/:project/topics",
             List.of(
-                RouteDefinition.get("GetTopic", "/:topic").authorize(TOPIC_GET).build(this::getHierarchies, this::get),
-                RouteDefinition.post("CreateTopic", "")
+                RouteDefinition.get("get", API_NAME, "/:topic")
+                               .authorize(TOPIC_GET)
+                               .build(this::getHierarchies, this::get),
+                RouteDefinition.post("create", API_NAME, "")
                                .hasBody()
                                .bodyParser(this::setRequestBody)
                                .authorize(TOPIC_CREATE)
                                .build(this::getHierarchies, this::create),
-                RouteDefinition.delete("DeleteTopic", "/:topic")
+                RouteDefinition.delete("delete", API_NAME, "/:topic")
                                .authorize(TOPIC_DELETE)
                                .build(this::getHierarchies, this::delete),
-                RouteDefinition.get("ListTopics", "")
+                RouteDefinition.get("list", API_NAME, "")
                                .authorize(TOPIC_LIST)
                                .build(this::getHierarchies, this::listTopics),
-                RouteDefinition.patch("RestoreTopic", "/:topic/restore")
+                RouteDefinition.patch("restore", API_NAME, "/:topic/restore")
                                .authorize(TOPIC_UPDATE)
                                .build(this::getHierarchies, this::restore)
             )
@@ -104,7 +107,7 @@ public class TopicHandlers implements RouteProvider {
      */
     public void setRequestBody(RoutingContext ctx) {
         TopicResource topicResource = ctx.body().asValidatedPojo(TopicResource.class);
-        ctx.put(CONTEXT_KEY_BODY, topicResource);
+        ctx.put(REQUEST_BODY, topicResource);
     }
 
     /**
@@ -120,7 +123,7 @@ public class TopicHandlers implements RouteProvider {
         Project project = projectService.getCachedProject(projectName);
 
         if (hasBody) {
-            TopicResource topicResource = ctx.get(CONTEXT_KEY_BODY);
+            TopicResource topicResource = ctx.get(REQUEST_BODY);
             return Map.of(ResourceType.TOPIC, new TopicHierarchy(project, topicResource.getName()));
         }
 
@@ -151,7 +154,7 @@ public class TopicHandlers implements RouteProvider {
         // TODO: Consider using Vertx ValidationHandlers to validate the request body.
         // TODO: Consider implementing rollback mechanisms for failure scenarios and ≠≠ kind of semantics for all operations.
         String projectName = ctx.pathParam(PATH_PARAM_PROJECT);
-        TopicResource topicResource = ctx.get(CONTEXT_KEY_BODY);
+        TopicResource topicResource = ctx.get(REQUEST_BODY);
         String requestedBy = ctx.getIdentityOrDefault();
 
         topicResource.setActorCode(getActorCode(requestedBy));

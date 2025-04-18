@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static com.flipkart.varadhi.common.Constants.CONTEXT_KEY_BODY;
+import static com.flipkart.varadhi.common.Constants.ContextKeys.REQUEST_BODY;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_PROJECT;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_SUBSCRIPTION;
 import static com.flipkart.varadhi.entities.Constants.SubscriptionProperties.*;
@@ -34,6 +34,7 @@ import static com.flipkart.varadhi.web.v1.admin.SubscriptionHandlers.getSubscrip
 @Slf4j
 @ExtensionMethod ({Extensions.RequestBodyExtension.class, Extensions.RoutingContextExtension.class})
 public class DlqHandlers implements RouteProvider {
+    public static final String API_NAME = "DLQ";
     private static final long UNSPECIFIED_TS = 0L;
     private final SubscriptionService subscriptionService;
     private final ProjectService projectService;
@@ -50,17 +51,17 @@ public class DlqHandlers implements RouteProvider {
         return new SubRoutes(
             "/v1/projects/:project/subscriptions/:subscription/dlq/messages",
             List.of(
-                RouteDefinition.post("Unsideline", "/unsideline")
+                RouteDefinition.post("Unsideline", API_NAME, "/unsideline")
                                .nonBlocking()
                                .hasBody()
                                .bodyParser(this::setUnsidelineRequest)
                                .authorize(SUBSCRIPTION_GET)
-                               .authorize(TOPIC_CONSUME)
+                               .authorize(TOPIC_SUBSCRIBE)
                                .build(this::getHierarchies, this::enqueueUnsideline),
-                RouteDefinition.get("GetMessages", "")
+                RouteDefinition.get("GetMessages", API_NAME, "")
                                .nonBlocking()
                                .authorize(SUBSCRIPTION_GET)
-                               .authorize(TOPIC_CONSUME)
+                               .authorize(TOPIC_SUBSCRIBE)
                                .build(this::getHierarchies, this::getMessages)
             )
         ).get();
@@ -68,7 +69,7 @@ public class DlqHandlers implements RouteProvider {
 
     public void setUnsidelineRequest(RoutingContext ctx) {
         UnsidelineRequest request = ctx.body().asPojo(UnsidelineRequest.class);
-        ctx.put(CONTEXT_KEY_BODY, request);
+        ctx.put(REQUEST_BODY, request);
     }
 
     public Map<ResourceType, ResourceHierarchy> getHierarchies(RoutingContext ctx, boolean hasBody) {
@@ -86,7 +87,7 @@ public class DlqHandlers implements RouteProvider {
     }
 
     public void enqueueUnsideline(RoutingContext ctx) {
-        UnsidelineRequest unsidelineRequest = ctx.get(CONTEXT_KEY_BODY);
+        UnsidelineRequest unsidelineRequest = ctx.get(REQUEST_BODY);
         VaradhiSubscription subscription = subscriptionService.getSubscription(getSubscriptionFqn(ctx));
         log.info("Unsideline requested for Subscription:{}", subscription.getName());
         validateUnsidelineCriteria(subscription, unsidelineRequest);

@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.List;
 import java.util.Map;
 
-import static com.flipkart.varadhi.common.Constants.CONTEXT_KEY_BODY;
+import static com.flipkart.varadhi.common.Constants.ContextKeys.REQUEST_BODY;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_ORG;
 import static com.flipkart.varadhi.common.Constants.PathParams.PATH_PARAM_TEAM;
 import static com.flipkart.varadhi.entities.auth.ResourceAction.*;
@@ -25,6 +25,7 @@ import static com.flipkart.varadhi.entities.auth.ResourceAction.*;
 @Slf4j
 @ExtensionMethod ({Extensions.RequestBodyExtension.class, Extensions.RoutingContextExtension.class})
 public class TeamHandlers implements RouteProvider {
+    public static final String API_NAME = "Team";
     private final TeamService teamService;
 
     public TeamHandlers(TeamService teamService) {
@@ -36,17 +37,21 @@ public class TeamHandlers implements RouteProvider {
         return new SubRoutes(
             "/v1/orgs/:org/teams",
             List.of(
-                RouteDefinition.get("ListTeams", "").authorize(TEAM_LIST).build(this::getHierarchies, this::listTeams),
-                RouteDefinition.get("ListProjects", "/:team/projects")
+                RouteDefinition.get("list", API_NAME, "")
+                               .authorize(TEAM_LIST)
+                               .build(this::getHierarchies, this::listTeams),
+                RouteDefinition.get("list", API_NAME, "/:team/projects")
                                .authorize(PROJECT_LIST)
                                .build(this::getHierarchies, this::listProjects),
-                RouteDefinition.get("GetTeam", "/:team").authorize(TEAM_GET).build(this::getHierarchies, this::get),
-                RouteDefinition.post("CreateTeam", "")
+                RouteDefinition.get("get", API_NAME, "/:team")
+                               .authorize(TEAM_GET)
+                               .build(this::getHierarchies, this::get),
+                RouteDefinition.post("create", API_NAME, "")
                                .hasBody()
                                .bodyParser(this::setTeam)
                                .authorize(TEAM_CREATE)
                                .build(this::getHierarchies, this::create),
-                RouteDefinition.delete("DeleteTeam", "/:team")
+                RouteDefinition.delete("delete", API_NAME, "/:team")
                                .authorize(TEAM_DELETE)
                                .build(this::getHierarchies, this::delete)
             )
@@ -55,12 +60,12 @@ public class TeamHandlers implements RouteProvider {
 
     public void setTeam(RoutingContext ctx) {
         Team team = ctx.body().asValidatedPojo(Team.class);
-        ctx.put(CONTEXT_KEY_BODY, team);
+        ctx.put(REQUEST_BODY, team);
     }
 
     public Map<ResourceType, ResourceHierarchy> getHierarchies(RoutingContext ctx, boolean hasBody) {
         if (hasBody) {
-            Team team = ctx.get(CONTEXT_KEY_BODY);
+            Team team = ctx.get(REQUEST_BODY);
             return Map.of(ResourceType.TEAM, new Hierarchies.TeamHierarchy(team.getOrg(), team.getName()));
         }
         String org = ctx.request().getParam(PATH_PARAM_ORG);
@@ -94,7 +99,7 @@ public class TeamHandlers implements RouteProvider {
 
     public void create(RoutingContext ctx) {
         String orgName = ctx.pathParam(PATH_PARAM_ORG);
-        Team team = ctx.get(CONTEXT_KEY_BODY);
+        Team team = ctx.get(REQUEST_BODY);
         if (!orgName.equals(team.getOrg())) {
             throw new IllegalArgumentException("Specified org name is different from org name in url");
         }
